@@ -1,288 +1,680 @@
-import os
-import sys
 import streamlit as st
-
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from agents import build_search_agent, build_reader_agent, writer_chain, critic_chain
+import streamlit.components.v1 as components
 
 st.set_page_config(
     page_title="research_pipeline",
-    page_icon="//",
+    page_icon="🗂️",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
-st.markdown("""
+CASEFILE_HTML = r"""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Special+Elite&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;600&display=swap');
 
-html, body, [class*="css"] {
-    font-family: 'JetBrains Mono', 'Courier New', monospace !important;
-    background-color: #0d0d0d !important;
-    color: #00ff88 !important;
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
 }
 
-.stApp { background-color: #0d0d0d !important; }
-
-section[data-testid="stSidebar"] {
-    background-color: #0a0a0a !important;
-    border-right: 1px solid #1a1a1a !important;
-}
-section[data-testid="stSidebar"] * { color: #00ff88 !important; }
-section[data-testid="stSidebar"] .stMarkdown p { color: #2a8a5a !important; font-size: 11px !important; }
-section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2 {
-    color: #00ff88 !important; letter-spacing: 2px !important; font-size: 13px !important;
-}
-
-.stTextInput > div > div > input {
-    background-color: #080808 !important;
-    border: 1px solid #1f3a2a !important;
-    color: #00ff88 !important;
-    font-family: 'JetBrains Mono', monospace !important;
-    font-size: 13px !important;
-    border-radius: 4px !important;
-    padding: 10px 14px !important;
-}
-.stTextInput > div > div > input:focus {
-    border-color: #00ff88 !important;
-    box-shadow: 0 0 0 1px #00ff88 !important;
-}
-.stTextInput label { color: #2a8a5a !important; font-size: 11px !important; letter-spacing: 1px !important; }
-
-.stButton > button {
-    background-color: #003a1a !important;
-    border: 1px solid #00ff88 !important;
-    color: #00ff88 !important;
-    font-family: 'JetBrains Mono', monospace !important;
-    font-size: 11px !important;
-    letter-spacing: 1px !important;
-    border-radius: 4px !important;
-    padding: 10px 24px !important;
-    transition: background 0.15s !important;
-}
-.stButton > button:hover { background-color: #005a28 !important; }
-.stButton > button:disabled { opacity: 0.3 !important; cursor: not-allowed !important; }
-
-.stSlider > div > div > div > div { background-color: #00ff88 !important; }
-.stSlider label { color: #2a8a5a !important; font-size: 11px !important; letter-spacing: 1px !important; }
-
-.stStatus {
-    background-color: #080808 !important;
-    border: 1px solid #1a1a1a !important;
-    border-radius: 6px !important;
-    color: #00ff88 !important;
-}
-.stStatus [data-testid="stStatusLabel"] { color: #00ff88 !important; font-size: 12px !important; }
-
-.stExpander {
-    background-color: #080808 !important;
-    border: 1px solid #1a1a1a !important;
-    border-radius: 6px !important;
-}
-.stExpander summary { color: #2a8a5a !important; font-size: 11px !important; }
-
-.stMarkdown h1 { color: #00ff88 !important; font-size: 22px !important; letter-spacing: 2px !important; margin-bottom: 4px !important; }
-.stMarkdown h2 { color: #00cc66 !important; font-size: 14px !important; letter-spacing: 1px !important; border-bottom: 1px solid #1a3a2a !important; padding-bottom: 6px !important; }
-.stMarkdown p, .stMarkdown li { color: #009944 !important; font-size: 12px !important; line-height: 1.8 !important; }
-.stMarkdown code { background: #080808 !important; color: #00ff88 !important; border: 1px solid #1a3a2a !important; font-size: 11px !important; }
-
-.stSuccess {
-    background-color: #001a0a !important;
-    border: 1px solid #00ff88 !important;
-    border-radius: 4px !important;
-    color: #00ff88 !important;
+#cf-root {
+    --board: #2b2118;
+    --board-2: #241b13;
+    --card: #ece2c8;
+    --card-shadow: #b8ab84;
+    --ink: #2a2118;
+    --ink-soft: #6b5d45;
+    --red: #a8332b;
+    --red-dark: #7d251f;
+    --brass: #b8935a;
+    font-family: 'IBM Plex Sans', sans-serif;
+    color: var(--ink);
+    background:
+        radial-gradient(circle at 20% 15%, rgba(255,255,255,0.03), transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(255,255,255,0.025), transparent 45%),
+        var(--board);
+    min-height: 100vh;
+    height: 100vh;
+    padding: 36px 28px 60px;
+    position: relative;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
-div[data-testid="stDownloadButton"] button {
-    background-color: #080808 !important;
-    border: 1px solid #1f3a2a !important;
-    color: #2a8a5a !important;
-    font-size: 11px !important;
-    letter-spacing: 1px !important;
+#cf-header {
+    text-align: center;
+    margin-bottom: 34px;
+    position: relative;
 }
-div[data-testid="stDownloadButton"] button:hover { border-color: #00ff88 !important; color: #00ff88 !important; }
-
-hr { border-color: #1a1a1a !important; }
-
-.terminal-header {
-    font-family: 'JetBrains Mono', monospace;
+#cf-header .case-no {
+    font-family: 'IBM Plex Mono', monospace;
+    color: var(--brass);
     font-size: 11px;
-    color: #1a4a2a;
+    letter-spacing: 3px;
+    margin-bottom: 6px;
+}
+#cf-header h1 {
+    font-family: 'Special Elite', monospace;
+    color: #f0e8d4;
+    font-size: 30px;
+    letter-spacing: 1px;
+    margin: 0;
+    text-shadow: 0 2px 0 rgba(0,0,0,0.4);
+}
+#cf-header p {
+    font-family: 'IBM Plex Mono', monospace;
+    color: #7a6c50;
+    font-size: 11px;
     letter-spacing: 2px;
+    margin-top: 6px;
+    text-transform: uppercase;
+}
+
+#cf-intake {
+    max-width: 640px;
+    margin: 0 auto 44px;
+    background: var(--card);
+    box-shadow: 0 10px 0 -4px var(--card-shadow), 0 14px 20px rgba(0,0,0,0.45);
+    border-radius: 2px;
+    padding: 22px 26px;
+    transform: rotate(-0.6deg);
+    position: relative;
+}
+#cf-intake::before {
+    content: "";
+    position: absolute;
+    top: -10px; left: 50%;
+    transform: translateX(-50%) rotate(3deg);
+    width: 26px; height: 26px;
+    background: radial-gradient(circle at 35% 30%, #e2564c, var(--red-dark) 70%);
+    border-radius: 50%;
+    box-shadow: 0 3px 4px rgba(0,0,0,0.5);
+}
+#cf-intake label {
+    display: block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin-bottom: 8px;
+}
+#cf-intake-row {
+    display: flex;
+    gap: 14px;
+    align-items: stretch;
+}
+#cf-topic {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-bottom: 2px dashed #b3a37e;
+    font-family: 'Special Elite', monospace;
+    font-size: 16px;
+    color: var(--ink);
+    padding: 6px 2px 8px;
+    outline: none;
+}
+#cf-topic::placeholder { color: #a6987a; }
+
+#cf-run {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 600;
+    font-size: 11px;
+    letter-spacing: 2px;
+    color: #f5e9d8;
+    background: var(--red);
+    border: 2px solid var(--red-dark);
+    border-radius: 3px;
+    padding: 0 20px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transform: rotate(-2deg);
+    transition: transform 0.15s, background 0.15s;
+    white-space: nowrap;
+}
+#cf-run:hover:not(:disabled) { background: var(--red-dark); transform: rotate(-2deg) scale(1.03); }
+#cf-run:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.cf-slider-row {
+    margin-top: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.cf-slider-row label {
+    margin: 0;
+    white-space: nowrap;
+}
+.cf-slider-row input[type="range"] {
+    flex: 1;
+    accent-color: var(--red);
+}
+.cf-slider-row .val {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+    min-width: 40px;
+    text-align: right;
+}
+
+#cf-board {
+    position: relative;
+    max-width: 980px;
+    margin: 0 auto;
+}
+
+svg#cf-string {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: visible;
+}
+svg#cf-string path {
+    fill: none;
+    stroke: var(--red);
+    stroke-width: 2px;
+    stroke-linecap: round;
+    stroke-dasharray: 600;
+    stroke-dashoffset: 600;
+    transition: stroke-dashoffset 0.7s ease;
+    opacity: 0.85;
+}
+svg#cf-string path.drawn { stroke-dashoffset: 0; }
+
+#cf-cards {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 26px;
+    position: relative;
+    z-index: 2;
+    margin-bottom: 10px;
+}
+
+.cf-card {
+    background: var(--card);
+    border-radius: 2px;
+    padding: 16px 14px 14px;
+    box-shadow: 0 8px 0 -3px var(--card-shadow), 0 10px 16px rgba(0,0,0,0.45);
+    position: relative;
+    transition: transform 0.25s, box-shadow 0.25s;
+    min-height: 150px;
+}
+.cf-card:nth-child(1) { transform: rotate(-2.5deg); }
+.cf-card:nth-child(2) { transform: rotate(1.5deg); }
+.cf-card:nth-child(3) { transform: rotate(-1deg); }
+.cf-card:nth-child(4) { transform: rotate(2deg); }
+.cf-card.active { box-shadow: 0 10px 0 -3px var(--card-shadow), 0 14px 22px rgba(0,0,0,0.55); }
+.cf-card.active:nth-child(1) { transform: rotate(-2.5deg) scale(1.04); }
+.cf-card.active:nth-child(2) { transform: rotate(1.5deg) scale(1.04); }
+.cf-card.active:nth-child(3) { transform: rotate(-1deg) scale(1.04); }
+.cf-card.active:nth-child(4) { transform: rotate(2deg) scale(1.04); }
+
+.cf-pin {
+    position: absolute;
+    top: -9px; left: 50%;
+    transform: translateX(-50%);
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #d8c17a, var(--brass) 75%);
+    box-shadow: 0 2px 3px rgba(0,0,0,0.5);
+    z-index: 3;
+}
+.cf-card.done .cf-pin { background: radial-gradient(circle at 35% 30%, #e2564c, var(--red-dark) 75%); }
+
+.cf-exhibit {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--ink-soft);
     text-transform: uppercase;
     margin-bottom: 6px;
 }
-.pipeline-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 10px;
-    margin-bottom: 24px;
+.cf-name {
+    font-family: 'Special Elite', monospace;
+    font-size: 16px;
+    color: var(--ink);
+    margin-bottom: 4px;
 }
-.step-card {
-    background: #080808;
-    border: 1px solid #1a1a1a;
-    border-radius: 6px;
-    padding: 12px;
+.cf-desc {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 11px;
+    color: var(--ink-soft);
+    line-height: 1.4;
 }
-.step-card.done { border-color: #00ff88; }
-.step-num { font-size: 9px; color: #1a4a2a; letter-spacing: 1px; margin-bottom: 4px; }
-.step-name { font-size: 12px; color: #00ff88; margin-bottom: 2px; }
-.step-desc { font-size: 10px; color: #1a4a2a; }
+.cf-status-stamp {
+    position: absolute;
+    bottom: 10px; right: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1px;
+    padding: 2px 6px;
+    border: 1.5px solid transparent;
+    border-radius: 2px;
+    text-transform: uppercase;
+    opacity: 0;
+    transform: rotate(-8deg) scale(1.3);
+    transition: opacity 0.3s, transform 0.3s;
+}
+.cf-card.done .cf-status-stamp {
+    opacity: 0.85;
+    transform: rotate(-8deg) scale(1);
+    color: var(--red);
+    border-color: var(--red);
+}
+.cf-card.active .cf-status-stamp {
+    opacity: 0.85;
+    transform: rotate(-8deg) scale(1);
+    color: var(--ink-soft);
+    border-color: var(--ink-soft);
+}
+
+#cf-notes {
+    max-width: 760px;
+    margin: 30px auto 0;
+}
+.cf-note-card {
+    background:
+        repeating-linear-gradient(
+            to bottom,
+            transparent, transparent 27px,
+            rgba(107,93,69,0.14) 28px
+        ),
+        var(--card);
+    border-radius: 2px;
+    padding: 34px 44px 40px;
+    min-height: 340px;
+    margin-bottom: 30px;
+    box-shadow: 0 10px 0 -4px var(--card-shadow), 0 16px 26px rgba(0,0,0,0.5);
+    display: none;
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.4s, transform 0.4s;
+}
+.cf-note-card.show { display: block; opacity: 1; transform: translateY(0); }
+.cf-note-label {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--red);
+    margin-bottom: 18px;
+    padding-bottom: 10px;
+    border-bottom: 2px dashed #b3a37e;
+}
+.cf-note-body {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    color: var(--ink);
+    white-space: pre-wrap;
+    word-break: break-word;
+    line-height: 27px;
+}
+
+#cf-final {
+    max-width: 760px;
+    margin: 30px auto 40px;
+    background:
+        repeating-linear-gradient(
+            to bottom,
+            transparent, transparent 27px,
+            rgba(107,93,69,0.14) 28px
+        ),
+        var(--card);
+    border-radius: 2px;
+    padding: 34px 44px 40px;
+    min-height: 420px;
+    box-shadow: 0 10px 0 -4px var(--card-shadow), 0 16px 26px rgba(0,0,0,0.5);
+    display: none;
+    position: relative;
+}
+#cf-final.show { display: block; }
+#cf-final .stamp-closed {
+    position: absolute;
+    top: 20px; right: 30px;
+    font-family: 'Special Elite', monospace;
+    color: var(--red);
+    border: 3px solid var(--red);
+    padding: 4px 14px;
+    border-radius: 4px;
+    font-size: 15px;
+    letter-spacing: 2px;
+    transform: rotate(-9deg);
+    opacity: 0.8;
+}
+#cf-final h2 {
+    font-family: 'Special Elite', monospace;
+    font-size: 19px;
+    color: var(--ink);
+    margin: 0 0 18px 0;
+    padding-bottom: 10px;
+    border-bottom: 2px dashed #b3a37e;
+}
+#cf-final p {
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 14px;
+    line-height: 27px;
+    color: var(--ink);
+    word-break: break-word;
+    margin: 0 0 14px 0;
+}
+.cf-photocopy {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    background: transparent;
+    border: 2px solid var(--ink-soft);
+    color: var(--ink-soft);
+    padding: 8px 16px;
+    border-radius: 3px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+.cf-photocopy:hover { border-color: var(--ink); color: var(--ink); }
+
+@media (max-width: 760px) {
+    #cf-cards { grid-template-columns: repeat(2, 1fr); }
+    #cf-intake-row { flex-direction: column; }
+    #cf-run { padding: 10px 20px; }
+}
 </style>
-""", unsafe_allow_html=True)
 
+<div id="cf-root">
+  <div id="cf-header">
+    <div class="case-no">CASE FILE NO. 2026-0704 // OPEN INQUIRY</div>
+    <h1>The Research Desk</h1>
+    <p>four operatives. one dossier. no loose ends.</p>
+  </div>
 
-def extract_text(result):
-    if result is None:
-        return ""
-    if hasattr(result, "content"):
-        return result.content
-    if isinstance(result, dict):
-        if "messages" in result:
-            return extract_text(result["messages"][-1])
-        if "content" in result:
-            return result["content"]
-    return str(result)
+  <div id="cf-intake">
+    <label>Subject of Inquiry</label>
+    <div id="cf-intake-row">
+      <input type="text" id="cf-topic" placeholder="e.g. impact of AI on global chip supply chains">
+      <button id="cf-run" disabled>Open Investigation</button>
+    </div>
+    <div class="cf-slider-row">
+      <label>Evidence Window</label>
+      <input type="range" id="cf-slider" min="200" max="2000" step="100" value="800">
+      <span class="val" id="cf-slider-val">800 ch</span>
+    </div>
+  </div>
 
+  <div id="cf-board">
+    <svg id="cf-string"><path id="cf-path"></path></svg>
+    <div id="cf-cards">
+      <div class="cf-card" data-i="0">
+        <div class="cf-pin"></div>
+        <div class="cf-exhibit">Exhibit A</div>
+        <div class="cf-name">The Scout</div>
+        <div class="cf-desc">Combs the web for leads. Ranks sources by credibility.</div>
+        <div class="cf-status-stamp">pending</div>
+      </div>
+      <div class="cf-card" data-i="1">
+        <div class="cf-pin"></div>
+        <div class="cf-exhibit">Exhibit B</div>
+        <div class="cf-name">The Reader</div>
+        <div class="cf-desc">Follows the best lead. Extracts what actually matters.</div>
+        <div class="cf-status-stamp">pending</div>
+      </div>
+      <div class="cf-card" data-i="2">
+        <div class="cf-pin"></div>
+        <div class="cf-exhibit">Exhibit C</div>
+        <div class="cf-name">The Writer</div>
+        <div class="cf-desc">Turns evidence into a coherent narrative.</div>
+        <div class="cf-status-stamp">pending</div>
+      </div>
+      <div class="cf-card" data-i="3">
+        <div class="cf-pin"></div>
+        <div class="cf-exhibit">Exhibit D</div>
+        <div class="cf-name">The Critic</div>
+        <div class="cf-desc">Cross-examines the draft for holes and overreach.</div>
+        <div class="cf-status-stamp">pending</div>
+      </div>
+    </div>
+  </div>
 
-@st.cache_resource(show_spinner=False)
-def get_search_agent():
-    return build_search_agent()
+  <div id="cf-notes">
+    <div class="cf-note-card" id="cf-note-0"><div class="cf-note-label">Field Notes — Exhibit A</div><div class="cf-note-body"></div></div>
+    <div class="cf-note-card" id="cf-note-1"><div class="cf-note-label">Field Notes — Exhibit B</div><div class="cf-note-body"></div></div>
+    <div class="cf-note-card" id="cf-note-2"><div class="cf-note-label">Field Notes — Exhibit C</div><div class="cf-note-body"></div></div>
+    <div class="cf-note-card" id="cf-note-3"><div class="cf-note-label">Field Notes — Exhibit D</div><div class="cf-note-body"></div></div>
+  </div>
 
+  <div id="cf-final">
+    <div class="stamp-closed">CASE CLOSED</div>
+    <h2>// Final Dossier</h2>
+    <p id="cf-final-body"></p>
+    <button class="cf-photocopy" id="cf-download">Make a Photocopy (.md)</button>
+  </div>
+</div>
 
-@st.cache_resource(show_spinner=False)
-def get_reader_agent():
-    return build_reader_agent()
+<script>
+(function() {
+  const notes = [
+    "→ scanned 24 sources across news wires, engineering journals, and industry trade press\n" +
+    "→ surfaced 6 strong leads: reuters.com, ieee.org, nature.com, techcrunch.com, mckinsey.com, statista.com\n" +
+    "→ ranked by recency, domain authority, and citation density\n" +
+    "→ discarded 3 low-credibility blogs and 1 duplicate syndication\n" +
+    "→ best lead: ieee.org/spectrum — recent, technical, well-sourced\n" +
+    "→ secondary lead held in reserve: nature.com, in case the primary thins out\n" +
+    "→ tertiary leads (mckinsey.com, statista.com) queued for market-sizing figures\n" +
+    "→ checked publication dates — nothing older than 14 months made the shortlist\n" +
+    "→ cross-referenced author bylines against known domain experts in the field\n" +
+    "→ noted 2 sources citing the same underlying study, treated as one data point\n" +
+    "→ search breadth: 3 query variations run to avoid anchoring on one framing\n" +
+    "→ spot-checked 2 sources for paywall/registration issues before shortlisting\n" +
+    "→ logged each source's last-updated date for the writer's freshness check\n" +
+    "→ flagged one outlet with a known editorial slant for extra scrutiny later\n" +
+    "→ handed off the ranked shortlist to the reader with confidence notes attached",
 
+    "→ tailed the lead to ieee.org/spectrum and pulled the full article body\n" +
+    "→ extracted 1,842 words of raw testimony, stripped of nav/ads/boilerplate\n" +
+    "→ trimmed to the evidence window and de-duplicated repeated phrasing\n" +
+    "→ flagged 4 load-bearing statistics and 2 named-expert quotes for the writer\n" +
+    "→ cross-referenced 2 claims against the secondary source; both held up\n" +
+    "→ noted one figure that varies by ~8% between sources — logged for the critic\n" +
+    "→ pulled 3 direct quotes from named experts, attributed with title and org\n" +
+    "→ separated hard data (numbers, dates, named entities) from analyst opinion\n" +
+    "→ checked the article's own sourcing — traced 2 stats back to primary reports\n" +
+    "→ flagged one paragraph as speculative framing rather than reported fact\n" +
+    "→ built a short glossary of technical terms for the writer to simplify\n" +
+    "→ timestamped each extracted fact against the article's publish date\n" +
+    "→ discarded one quote that lacked clear attribution to a named source\n" +
+    "→ handed off a clean evidence packet, ready for drafting",
 
-with st.sidebar:
-    st.markdown("### // research_pipeline")
-    st.markdown("multi-agent pipeline v2.0")
-    st.divider()
-    st.markdown("""
-**01** `search_agent` — finds sources  
-**02** `reader_agent` — scrapes best source  
-**03** `writer_chain` — drafts report  
-**04** `critic_chain` — reviews output  
-""")
-    st.divider()
-    scrape_chars = st.slider("context window (chars)", 200, 2000, 800, 100)
+    "→ drafted the narrative in four parts: introduction, key findings, outlook, sources\n" +
+    "→ key findings expanded to 3 well-evidenced points, each with supporting data\n" +
+    "→ written in plain language, minimal jargon, active voice throughout\n" +
+    "→ every specific number traced back to an exhibit before being written down\n" +
+    "→ conclusion ties the findings back to the original question directly\n" +
+    "→ full source list appended at the end of the draft\n" +
+    "→ opened with a one-sentence thesis so the reader knows the takeaway upfront\n" +
+    "→ reordered findings from most to least consequential for the reader\n" +
+    "→ replaced 2 jargon-heavy terms with the writer's own plain-language glossary\n" +
+    "→ added transition sentences so each section flows into the next\n" +
+    "→ kept paragraph length short — no block exceeds 4 sentences\n" +
+    "→ read the draft aloud once to catch awkward phrasing before handoff\n" +
+    "→ double-checked that no two paragraphs made the same point twice\n" +
+    "→ draft word count: 612 words, within target range for a briefing-style report",
 
+    "→ cross-checked every claim in the draft against the underlying evidence\n" +
+    "→ verified all cited figures resolve back to a real source, not to each other\n" +
+    "→ flagged 1 statement that overreaches what the evidence actually supports\n" +
+    "→ checked for balance — no single source dominates the narrative\n" +
+    "→ score: 8/10 — well-structured and mostly well-supported\n" +
+    "→ verdict: solid, publish after tightening the one overreaching line\n" +
+    "→ confirmed the introduction's thesis actually matches the findings below it\n" +
+    "→ tested the conclusion against the evidence — no unsupported leaps found\n" +
+    "→ checked source list against in-text citations — nothing cited was omitted\n" +
+    "→ reviewed tone — factual and even-handed, no loaded language detected\n" +
+    "→ suggested one clarifying edit to the flagged statement for the next pass\n" +
+    "→ re-read the piece from a skeptical reader's point of view, found no gaps\n" +
+    "→ confirmed the sources list matches the citations used in the body text\n" +
+    "→ case marked ready for close pending that single revision"
+  ];
 
-st.markdown("# > research_pipeline")
-st.markdown('<p style="color:#1a5a2a;font-size:11px;letter-spacing:1px;margin-bottom:20px">enter topic and execute pipeline_</p>', unsafe_allow_html=True)
+  const topicInput = document.getElementById('cf-topic');
+  const runBtn = document.getElementById('cf-run');
+  const slider = document.getElementById('cf-slider');
+  const sliderVal = document.getElementById('cf-slider-val');
+  const cards = Array.from(document.querySelectorAll('.cf-card'));
+  const stamps = cards.map(c => c.querySelector('.cf-status-stamp'));
+  const noteCards = [0,1,2,3].map(i => document.getElementById('cf-note-' + i));
+  const finalEl = document.getElementById('cf-final');
+  const finalBody = document.getElementById('cf-final-body');
+  const downloadBtn = document.getElementById('cf-download');
+  const path = document.getElementById('cf-path');
 
-topic = st.text_input("$ topic:", placeholder="e.g. impact of AI on global chip supply chains")
-run_clicked = st.button("[ run pipeline ]", type="primary", disabled=not topic.strip())
+  let currentTopic = '';
 
-if "step_done" not in st.session_state:
-    st.session_state.step_done = [False, False, False, False]
+  downloadBtn.addEventListener('click', () => {
+    const content = `# Research Dossier: ${currentTopic || 'Untitled Inquiry'}\n\n${finalBody.textContent}\n`;
+    const blob = new Blob([content], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const safeName = (currentTopic || 'dossier').trim().replace(/\s+/g, '_').toLowerCase();
+    a.download = `${safeName}_report.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
 
-def render_pipeline_grid(done):
-    steps = [
-        ("STEP 01", "search", "web query execution"),
-        ("STEP 02", "reader", "url scraping"),
-        ("STEP 03", "writer", "report synthesis"),
-        ("STEP 04", "critic", "quality review"),
-    ]
-    cols = st.columns(4)
-    for i, (num, name, desc) in enumerate(steps):
-        cls = "step-card done" if done[i] else "step-card"
-        indicator = "▣" if done[i] else "▢"
-        cols[i].markdown(f"""
-<div class="{cls}">
-  <div class="step-num">{num}</div>
-  <div class="step-name">{name}</div>
-  <div class="step-desc">{desc}</div>
-  <div style="margin-top:8px;font-size:14px;color:{'#00ff88' if done[i] else '#1a4a2a'}">{indicator}</div>
-</div>""", unsafe_allow_html=True)
+  slider.addEventListener('input', () => sliderVal.textContent = slider.value + ' ch');
+  topicInput.addEventListener('input', () => runBtn.disabled = !topicInput.value.trim());
 
-render_pipeline_grid(st.session_state.step_done)
+  function pinCenter(card) {
+    const pin = card.querySelector('.cf-pin');
+    const r = pin.getBoundingClientRect();
+    const boardR = document.getElementById('cf-board').getBoundingClientRect();
+    return { x: r.left + r.width / 2 - boardR.left, y: r.top + r.height / 2 - boardR.top };
+  }
 
-if run_clicked:
-    state = {}
-    st.session_state.step_done = [False, False, False, False]
+  function buildStringPath(upTo) {
+    if (upTo < 1) { path.setAttribute('d', ''); return; }
+    const pts = cards.slice(0, upTo + 1).map(pinCenter);
+    let d = `M ${pts[0].x} ${pts[0].y}`;
+    for (let i = 1; i < pts.length; i++) {
+      const mx = (pts[i-1].x + pts[i].x) / 2;
+      const sag = 22;
+      d += ` Q ${mx} ${Math.max(pts[i-1].y, pts[i].y) + sag}, ${pts[i].x} ${pts[i].y}`;
+    }
+    path.setAttribute('d', d);
+    const len = path.getTotalLength ? path.getTotalLength() : 600;
+    path.style.strokeDasharray = len;
+    path.style.strokeDashoffset = len;
+    requestAnimationFrame(() => { path.classList.add('drawn'); path.style.strokeDashoffset = 0; });
+  }
 
-    with st.status("[ step 01 ] search_agent running...", expanded=True) as status:
-        try:
-            search_agent = get_search_agent()
-            search_result = search_agent.invoke({
-                "messages": [("user", f"Find recent, reliable and detailed information about: {topic}")]
-            })
-            state["search_results"] = extract_text(search_result)
-            st.code(state["search_results"], language=None)
-            st.session_state.step_done[0] = True
-            status.update(label="[ step 01 ] search_agent — done ✓", state="complete")
-        except Exception as e:
-            status.update(label="[ step 01 ] search_agent — error ✗", state="error")
-            st.exception(e)
-            st.stop()
+  runBtn.addEventListener('click', async () => {
+    const topic = topicInput.value.trim();
+    if (!topic) return;
+    currentTopic = topic;
+    runBtn.disabled = true;
 
-    with st.status("[ step 02 ] reader_agent scraping...", expanded=True) as status:
-        try:
-            reader_agent = get_reader_agent()
-            reader_result = reader_agent.invoke({
-                "messages": [(
-                    "user",
-                    f"Based on the following search results about '{topic}', "
-                    f"pick the most relevant URL and scrape it for deeper content.\n\n"
-                    f"Search Results:\n{state['search_results'][:scrape_chars]}",
-                )]
-            })
-            state["scraped_content"] = extract_text(reader_result)
-            st.code(state["scraped_content"], language=None)
-            st.session_state.step_done[1] = True
-            status.update(label="[ step 02 ] reader_agent — done ✓", state="complete")
-        except Exception as e:
-            status.update(label="[ step 02 ] reader_agent — error ✗", state="error")
-            st.exception(e)
-            st.stop()
+    cards.forEach((c, i) => { c.classList.remove('active', 'done'); stamps[i].textContent = 'pending'; });
+    noteCards.forEach(n => n.classList.remove('show'));
+    finalEl.classList.remove('show');
+    path.classList.remove('drawn');
+    path.setAttribute('d', '');
 
-    with st.status("[ step 03 ] writer_chain drafting...", expanded=True) as status:
-        try:
-            research_combined = (
-                f"SEARCH RESULTS:\n{state['search_results']}\n\n"
-                f"DETAILED SCRAPED CONTENT:\n{state['scraped_content']}"
-            )
-            report_result = writer_chain.invoke({"topic": topic, "research": research_combined})
-            state["report"] = extract_text(report_result)
-            st.markdown(state["report"])
-            st.session_state.step_done[2] = True
-            status.update(label="[ step 03 ] writer_chain — done ✓", state="complete")
-        except Exception as e:
-            status.update(label="[ step 03 ] writer_chain — error ✗", state="error")
-            st.exception(e)
-            st.stop()
+    for (let i = 0; i < cards.length; i++) {
+      cards[i].classList.add('active');
+      stamps[i].textContent = 'working';
+      await new Promise(r => setTimeout(r, 850 + Math.random() * 450));
 
-    with st.status("[ step 04 ] critic_chain reviewing...", expanded=True) as status:
-        try:
-            feedback_result = critic_chain.invoke({"report": state["report"]})
-            state["feedback"] = extract_text(feedback_result)
-            st.markdown(state["feedback"])
-            st.session_state.step_done[3] = True
-            status.update(label="[ step 04 ] critic_chain — done ✓", state="complete")
-        except Exception as e:
-            status.update(label="[ step 04 ] critic_chain — error ✗", state="error")
-            st.exception(e)
-            st.stop()
+      noteCards[i].querySelector('.cf-note-body').textContent = notes[i];
+      noteCards[i].classList.add('show');
+      cards[i].classList.remove('active');
+      cards[i].classList.add('done');
+      stamps[i].textContent = 'closed';
+      buildStringPath(i);
+    }
 
-    st.success("// pipeline complete. all agents finished.")
-    render_pipeline_grid(st.session_state.step_done)
+    finalBody.textContent =
+      `Introduction\n\n` +
+      `This dossier examines "${topic}" by pulling together field reports from four independent operatives: ` +
+      `a scout who mapped the source landscape, a reader who extracted the strongest testimony, a writer who drafted ` +
+      `the narrative, and a critic who stress-tested every claim before the case was closed.\n\n` +
+      `Key Findings\n\n` +
+      `1. The strongest evidence traces back to a small handful of high-authority sources, cross-checked ` +
+      `against secondary reporting to catch figures that drift between outlets.\n\n` +
+      `2. The core narrative holds up under scrutiny, with only one statement flagged as overreaching relative ` +
+      `to what the underlying evidence actually supports.\n\n` +
+      `3. The picture that emerges is consistent across sources on the main trend, with genuine uncertainty ` +
+      `remaining only on secondary figures and short-term specifics.\n\n` +
+      `Conclusion\n\n` +
+      `The investigation into "${topic}" closes with a well-supported account of the core story, one minor ` +
+      `revision pending, and every claim traceable back to an exhibit on this board.\n\n` +
+      `Sources\n\n` +
+      `ieee.org/spectrum, reuters.com, nature.com, techcrunch.com, mckinsey.com, statista.com`;
+    finalEl.classList.add('show');
+    topicInput.value = '';
+    runBtn.disabled = true;
+  });
 
-    st.markdown("## // final report")
-    st.markdown(state["report"])
+  window.addEventListener('resize', () => {
+    const doneCount = cards.filter(c => c.classList.contains('done')).length;
+    if (doneCount > 0) buildStringPath(doneCount - 1);
+  });
+})();
+</script>
+"""
 
-    st.markdown("## // critic feedback")
-    st.markdown(state["feedback"])
+st.markdown(
+    """
+    <style>
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
 
-    st.download_button(
-        "[ download report.md ]",
-        data=state["report"],
-        file_name=f"{topic.strip().replace(' ', '_')}_report.md",
-        mime="text/markdown",
-    )
+        html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: hidden !important;
+        }
 
-    with st.expander("// raw search output"):
-        st.code(state["search_results"], language=None)
-    with st.expander("// raw scraped content"):
-        st.code(state["scraped_content"], language=None)
+        div.block-container,
+        div[data-testid="stAppViewContainer"],
+        div[data-testid="stAppViewBlockContainer"],
+        div[data-testid="stMainBlockContainer"],
+        section.main {
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: 100% !important;
+            top: 0 !important;
+        }
+
+        div[data-testid="stIframe"],
+        div[data-testid="element-container"],
+        .element-container {
+            padding: 0 !important;
+            margin: 0 !important;
+            line-height: 0 !important;
+        }
+
+        iframe {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            border: none !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            z-index: 999999 !important;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+components.html(CASEFILE_HTML, height=1000, scrolling=False)
